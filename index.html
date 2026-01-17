@@ -1,12 +1,9 @@
 <!doctype html>
-<html>
+<html lang="ja">
   <head>
     <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, user-scalable=no"
-    />
-    <title>宮城県バスナビ</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>仙台バスマップ</title>
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
     <link
       href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css"
@@ -27,38 +24,34 @@
         background: #f8f8f8;
       }
 
-      /* バス停：基準点コンテナ（サイズ0） */
+      /* バス停：当たり判定を持つコンテナ */
       .stop-marker-container {
-        position: relative;
-        width: 0;
-        height: 0;
-        pointer-events: auto !important;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         cursor: pointer;
+        pointer-events: auto !important;
       }
 
-      /* バス停の丸：座標の中心に配置 */
+      /* バス停の丸（16pxに拡大） */
       .stop-dot {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 12px;
-        height: 12px;
+        width: 16px;
+        height: 16px;
         background: #fff;
-        border: 3px solid #00703c;
+        border: 4px solid #00703c;
         border-radius: 50%;
         box-sizing: border-box;
-        transform: translate(-50%, -50%);
-        z-index: 2;
+        flex-shrink: 0;
       }
 
-      /* バス停名：座標の左側に配置し、垂直中央をアイコンに合わせる */
+      /* バス停名：アイコンの左側に配置（重なり防止のため距離を確保） */
       .stop-label {
         position: absolute;
-        top: 0;
-        right: 10px;
-        transform: translateY(-50%);
-        color: #5e5e5e;
-        font-size: 10px;
+        right: 22px; /* アイコン半径8px + 隙間分 */
+        color: #444;
+        font-size: 13px;
         font-weight: bold;
         white-space: nowrap;
         text-shadow:
@@ -66,32 +59,33 @@
           -2px 2px 0 #fff,
           2px -2px 0 #fff,
           -2px -2px 0 #fff,
-          0 0 4px #fff;
+          0 0 6px #fff;
         pointer-events: none;
-        z-index: 1;
       }
 
-      /* バス：基準点コンテナ */
+      /* バス：当たり判定をしっかり持つコンテナ */
       .bus-marker-container {
-        position: relative;
-        width: 0;
-        height: 0;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         cursor: pointer;
         pointer-events: auto !important;
       }
+
+      /* バス画像 */
       .bus-img {
-        position: absolute;
-        top: 0;
-        left: 0;
         width: 36px;
         height: 36px;
-        transform: translate(-50%, -50%);
         pointer-events: none;
       }
+
+      /* バスの看板 */
       .bus-label {
         position: absolute;
-        bottom: 22px;
-        left: 0;
+        bottom: 42px;
+        left: 50%;
         transform: translateX(-50%);
         color: white;
         background: #d32f2f;
@@ -134,6 +128,22 @@
       .panel-header {
         padding: 0 24px 16px 24px;
         border-bottom: 1px solid #f0f0f0;
+      }
+      .panel-via {
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 2px;
+      }
+      .panel-title {
+        font-size: 20px;
+        font-weight: 800;
+        color: #333;
+      }
+      .office-info {
+        font-size: 12px;
+        color: #444;
+        margin-top: 4px;
+        font-weight: bold;
       }
       .panel-content {
         flex: 1;
@@ -184,25 +194,9 @@
     <div id="bottom-panel">
       <div class="drag-handle" onclick="closePanel()"></div>
       <div class="panel-header">
-        <div
-          id="panel-via"
-          style="font-size: 12px; color: #666; margin-bottom: 2px"
-        ></div>
-        <div
-          id="panel-title"
-          style="font-size: 20px; font-weight: 800; color: #333"
-        >
-          バス停を選択
-        </div>
-        <div
-          id="office-info"
-          style="
-            font-size: 12px;
-            color: #444;
-            margin-top: 4px;
-            font-weight: bold;
-          "
-        ></div>
+        <div id="panel-via" class="panel-via"></div>
+        <div id="panel-title" class="panel-title">バス停を選択</div>
+        <div id="office-info" class="office-info"></div>
       </div>
       <div id="panel-content" class="panel-content"></div>
     </div>
@@ -221,7 +215,6 @@
       let currentPanelTrip = null;
 
       async function init() {
-        // JSONの読み込み
         stopsData = await fetch("stops.json").then((res) => res.json());
         shapesData = await fetch("shapes.json").then((res) => res.json());
         timetablesData = await fetch("timetables.json").then((res) =>
@@ -298,22 +291,31 @@
             const trip = timetablesData[routeId][tripId];
             if (!isServiceRunningToday(trip.service_id)) return;
             const stops = trip.stops;
+
             if (
               nowSec >= timeToSec(stops[0].time) &&
               nowSec <= timeToSec(stops[stops.length - 1].time)
             ) {
               const pos = calculateBusPos(trip, nowSec);
               if (!pos) return;
+
               if (!busMarkers[tripId]) {
                 const el = document.createElement("div");
                 el.className = "bus-marker-container";
                 const rName = routesData[routeId]?.short_name || "";
                 el.innerHTML = `<div class="bus-label">[${rName}] ${trip.headsign}行</div><img src="https://maps.google.com/mapfiles/ms/icons/bus.png" class="bus-img">`;
-                el.addEventListener("click", (e) => {
+
+                // バスタップイベントを確実に付与
+                const handler = (e) => {
                   e.stopPropagation();
                   selectBus(trip.headsign, tripId, routeId);
-                });
-                busMarkers[tripId] = new maplibregl.Marker({ element: el })
+                };
+                el.addEventListener("click", handler);
+                el.addEventListener("touchstart", handler);
+
+                busMarkers[tripId] = new maplibregl.Marker({
+                  element: el,
+                })
                   .setLngLat(pos)
                   .addTo(map);
               } else {
@@ -334,6 +336,7 @@
           return null;
         const coords = shapeData.coordinates;
         const indices = shapeData.stop_indices;
+
         for (let i = 0; i < trip.stops.length - 1; i++) {
           const s1 = timeToSec(trip.stops[i].time),
             s2 = timeToSec(trip.stops[i + 1].time);
@@ -358,34 +361,43 @@
         Object.keys(stopsData).forEach((id) => {
           const stop = stopsData[id];
           if (!bounds.contains([stop.lng, stop.lat])) return;
-          if (zoom < 18 && seen.has(stop.name)) return;
-          seen.add(stop.name);
+
+          // ズーム16.5未満なら名前でグルーピング
+          if (zoom < 16.5) {
+            if (seen.has(stop.name)) return;
+            seen.add(stop.name);
+          }
 
           const el = document.createElement("div");
           el.className = "stop-marker-container";
+
           const label = document.createElement("div");
           label.className = "stop-label";
           label.innerText =
             stop.name +
-            (zoom >= 18 && stop.platform ? ` (${stop.platform}番)` : "");
+            (zoom >= 16.5 && stop.platform ? ` (${stop.platform}番)` : "");
           const dot = document.createElement("div");
           dot.className = "stop-dot";
+
           el.appendChild(label);
           el.appendChild(dot);
           const marker = new maplibregl.Marker({ element: el })
             .setLngLat([stop.lng, stop.lat])
             .addTo(map);
-          el.onclick = (e) => {
+
+          const handler = (e) => {
             e.stopPropagation();
             showNextBuses(id);
           };
+          el.addEventListener("click", handler);
+          el.addEventListener("touchstart", handler);
           stopMarkers.push(marker);
         });
       }
 
       function showNextBuses(stopId) {
-        currentPanelTrip = null;
         const stop = stopsData[stopId];
+        currentPanelTrip = null;
         document.getElementById("panel-via").innerText = "";
         const platformText = stop.platform ? ` (${stop.platform}番のりば)` : "";
         document.getElementById("panel-title").innerText =
@@ -433,12 +445,14 @@
         currentPanelTrip = { tripId, routeId, highlightId };
         const routeInfo = routesData[routeId];
         const content = document.getElementById("panel-content");
+
         document.getElementById("panel-via").innerText = trip.via
           ? `${trip.via} 経由`
           : "";
         document.getElementById("panel-title").innerText = `${headsign}行`;
         document.getElementById("office-info").innerText =
           extraData.offices[trip.office_id] || "";
+
         content.innerHTML = "";
         const nowStr = new Date().toTimeString().split(" ")[0];
         let targetScrollEl = null;
@@ -447,9 +461,13 @@
           const next = trip.stops.find((st) => st.time > nowStr);
           if (next) nextStopId = next.stop_id;
         }
+
         trip.stops.forEach((st, index) => {
           const s = stopsData[st.stop_id];
           const isPast = st.time < nowStr;
+          const isHighlight = st.stop_id === highlightId;
+          const isNextBusStop = !highlightId && st.stop_id === nextStopId;
+
           const div = document.createElement("div");
           div.id = `row-${index}`;
           div.className = `item-row ${isPast ? "past" : "future"} ${st.stop_id === highlightId ? "highlight" : ""} ${!highlightId && st.stop_id === nextStopId ? "next-stop" : ""}`;
@@ -467,6 +485,7 @@
           if (st.stop_id === nextStopId || st.stop_id === highlightId)
             targetScrollEl = div;
         });
+
         const patternKey = trip.stops.map((s) => s.stop_id).join("|");
         const shape = shapesData[patternKey];
         if (shape) {
@@ -491,6 +510,7 @@
           });
         }
         document.getElementById("bottom-panel").classList.add("open");
+
         if (targetScrollEl) {
           setTimeout(() => {
             content.scrollTop =
