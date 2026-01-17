@@ -1,0 +1,530 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>宮城県バスナビ</title>
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link
+      href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        font-family: "Hiragino Kaku Gothic ProN", sans-serif;
+      }
+      #map {
+        height: 100vh;
+        width: 100%;
+        background: #f8f8f8;
+      }
+
+      /* バス停：基準点コンテナ（サイズ0） */
+      .stop-marker-container {
+        position: relative;
+        width: 0;
+        height: 0;
+        pointer-events: auto !important;
+        cursor: pointer;
+      }
+
+      /* バス停の丸：座標の中心に配置 */
+      .stop-dot {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 12px;
+        height: 12px;
+        background: #fff;
+        border: 3px solid #00703c;
+        border-radius: 50%;
+        box-sizing: border-box;
+        transform: translate(-50%, -50%);
+        z-index: 2;
+      }
+
+      /* バス停名：座標の左側に配置し、垂直中央をアイコンに合わせる */
+      .stop-label {
+        position: absolute;
+        top: 0;
+        right: 10px;
+        transform: translateY(-50%);
+        color: #5e5e5e;
+        font-size: 10px;
+        font-weight: bold;
+        white-space: nowrap;
+        text-shadow:
+          2px 2px 0 #fff,
+          -2px 2px 0 #fff,
+          2px -2px 0 #fff,
+          -2px -2px 0 #fff,
+          0 0 4px #fff;
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      /* バス：基準点コンテナ */
+      .bus-marker-container {
+        position: relative;
+        width: 0;
+        height: 0;
+        cursor: pointer;
+        pointer-events: auto !important;
+      }
+      .bus-img {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 36px;
+        height: 36px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+      .bus-label {
+        position: absolute;
+        bottom: 22px;
+        left: 0;
+        transform: translateX(-50%);
+        color: white;
+        background: #d32f2f;
+        padding: 3px 10px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: bold;
+        border: 2px solid white;
+        white-space: nowrap;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        pointer-events: none;
+      }
+
+      /* ボトムパネル */
+      #bottom-panel {
+        position: absolute;
+        bottom: -60%;
+        left: 0;
+        width: 100%;
+        height: 60%;
+        background: white;
+        z-index: 2000;
+        transition: 0.35s cubic-bezier(0.19, 1, 0.22, 1);
+        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15);
+        border-radius: 24px 24px 0 0;
+        display: flex;
+        flex-direction: column;
+      }
+      #bottom-panel.open {
+        bottom: 0;
+      }
+      .drag-handle {
+        width: 50px;
+        height: 5px;
+        background: #e0e0e0;
+        border-radius: 10px;
+        margin: 12px auto;
+        cursor: pointer;
+      }
+      .panel-header {
+        padding: 0 24px 16px 24px;
+        border-bottom: 1px solid #f0f0f0;
+      }
+      .panel-content {
+        flex: 1;
+        overflow-y: auto;
+        scroll-behavior: smooth;
+      }
+      .item-row {
+        padding: 18px 24px;
+        border-bottom: 1px solid #f8f8f8;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .item-row:active {
+        background-color: #eee !important;
+      }
+      .item-row.past {
+        color: #ccc;
+        background: #fafafa;
+      }
+      .item-row.future {
+        color: #00703c;
+        font-weight: bold;
+      }
+      .item-row.highlight {
+        background: #fffde7;
+        border-left: 6px solid #fbc02d;
+        padding-left: 18px;
+      }
+      .item-row.next-stop {
+        background: #e8f5e9;
+        border-left: 6px solid #4caf50;
+        padding-left: 18px;
+      }
+      .item-time {
+        width: 65px;
+        font-size: 18px;
+        letter-spacing: -1px;
+      }
+      .item-info {
+        flex: 1;
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bottom-panel">
+      <div class="drag-handle" onclick="closePanel()"></div>
+      <div class="panel-header">
+        <div
+          id="panel-via"
+          style="font-size: 12px; color: #666; margin-bottom: 2px"
+        ></div>
+        <div
+          id="panel-title"
+          style="font-size: 20px; font-weight: 800; color: #333"
+        >
+          バス停を選択
+        </div>
+        <div
+          id="office-info"
+          style="
+            font-size: 12px;
+            color: #444;
+            margin-top: 4px;
+            font-weight: bold;
+          "
+        ></div>
+      </div>
+      <div id="panel-content" class="panel-content"></div>
+    </div>
+    <div id="map"></div>
+
+    <script>
+      let map,
+        stopsData,
+        shapesData,
+        timetablesData,
+        calendarData,
+        routesData,
+        extraData;
+      let busMarkers = {},
+        stopMarkers = [];
+      let currentPanelTrip = null;
+
+      async function init() {
+        // JSONの読み込み
+        stopsData = await fetch("stops.json").then((res) => res.json());
+        shapesData = await fetch("shapes.json").then((res) => res.json());
+        timetablesData = await fetch("timetables.json").then((res) =>
+          res.json(),
+        );
+        calendarData = await fetch("calendar.json").then((res) => res.json());
+        routesData = await fetch("routes.json").then((res) => res.json());
+        extraData = await fetch("extra.json").then((res) => res.json());
+
+        map = new maplibregl.Map({
+          container: "map",
+          style: {
+            version: 8,
+            sources: {
+              gsi: {
+                type: "raster",
+                tiles: [
+                  "https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png",
+                ],
+                tileSize: 256,
+                attribution: "国土地理院",
+                maxzoom: 18,
+              },
+            },
+            layers: [{ id: "gsi-layer", type: "raster", source: "gsi" }],
+          },
+          center: [140.8824, 38.2601],
+          zoom: 15,
+        });
+
+        map.on("load", () => {
+          updateStopMarkers();
+          setInterval(updateBuses, 5000);
+          setInterval(updatePanelState, 2000);
+          updateBuses();
+        });
+
+        map.on("moveend", updateStopMarkers);
+        map.on("click", (e) => {
+          if (e.originalEvent.target.className.includes("maplibregl-canvas"))
+            closePanel();
+        });
+      }
+
+      function isServiceRunningToday(serviceId) {
+        const now = new Date();
+        const ymd =
+          now.getFullYear() +
+          String(now.getMonth() + 1).padStart(2, "0") +
+          String(now.getDate()).padStart(2, "0");
+        const exception = (extraData.calendar_dates || []).find(
+          (d) => d.date === ymd && d.service_id === serviceId,
+        );
+        if (exception) return exception.exception_type === "1";
+        const cal = calendarData[serviceId];
+        if (!cal || ymd < cal.start || ymd > cal.end) return false;
+        const gtfsDayIdx = (now.getDay() + 6) % 7;
+        return cal.days[gtfsDayIdx] === "1";
+      }
+
+      function timeToSec(t) {
+        if (!t) return 0;
+        const [h, m, s] = t.split(":").map(Number);
+        return h * 3600 + m * 60 + (s || 0);
+      }
+
+      function updateBuses() {
+        const now = new Date();
+        const nowSec =
+          now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+
+        Object.keys(timetablesData).forEach((routeId) => {
+          Object.keys(timetablesData[routeId]).forEach((tripId) => {
+            const trip = timetablesData[routeId][tripId];
+            if (!isServiceRunningToday(trip.service_id)) return;
+            const stops = trip.stops;
+            if (
+              nowSec >= timeToSec(stops[0].time) &&
+              nowSec <= timeToSec(stops[stops.length - 1].time)
+            ) {
+              const pos = calculateBusPos(trip, nowSec);
+              if (!pos) return;
+              if (!busMarkers[tripId]) {
+                const el = document.createElement("div");
+                el.className = "bus-marker-container";
+                const rName = routesData[routeId]?.short_name || "";
+                el.innerHTML = `<div class="bus-label">[${rName}] ${trip.headsign}行</div><img src="https://maps.google.com/mapfiles/ms/icons/bus.png" class="bus-img">`;
+                el.addEventListener("click", (e) => {
+                  e.stopPropagation();
+                  selectBus(trip.headsign, tripId, routeId);
+                });
+                busMarkers[tripId] = new maplibregl.Marker({ element: el })
+                  .setLngLat(pos)
+                  .addTo(map);
+              } else {
+                busMarkers[tripId].setLngLat(pos);
+              }
+            } else if (busMarkers[tripId]) {
+              busMarkers[tripId].remove();
+              delete busMarkers[tripId];
+            }
+          });
+        });
+      }
+
+      function calculateBusPos(trip, nowSec) {
+        const patternKey = trip.stops.map((s) => s.stop_id).join("|");
+        const shapeData = shapesData[patternKey];
+        if (!shapeData || !shapeData.coordinates || !shapeData.stop_indices)
+          return null;
+        const coords = shapeData.coordinates;
+        const indices = shapeData.stop_indices;
+        for (let i = 0; i < trip.stops.length - 1; i++) {
+          const s1 = timeToSec(trip.stops[i].time),
+            s2 = timeToSec(trip.stops[i + 1].time);
+          if (nowSec >= s1 && nowSec < s2) {
+            const timeRatio = (nowSec - s1) / (s2 - s1);
+            const targetIndex = Math.floor(
+              indices[i] + (indices[i + 1] - indices[i]) * timeRatio,
+            );
+            return coords[Math.min(targetIndex, coords.length - 1)];
+          }
+        }
+        return null;
+      }
+
+      function updateStopMarkers() {
+        const zoom = map.getZoom();
+        const bounds = map.getBounds();
+        stopMarkers.forEach((m) => m.remove());
+        stopMarkers = [];
+        if (zoom < 14) return;
+        const seen = new Set();
+        Object.keys(stopsData).forEach((id) => {
+          const stop = stopsData[id];
+          if (!bounds.contains([stop.lng, stop.lat])) return;
+          if (zoom < 18 && seen.has(stop.name)) return;
+          seen.add(stop.name);
+
+          const el = document.createElement("div");
+          el.className = "stop-marker-container";
+          const label = document.createElement("div");
+          label.className = "stop-label";
+          label.innerText =
+            stop.name +
+            (zoom >= 18 && stop.platform ? ` (${stop.platform}番)` : "");
+          const dot = document.createElement("div");
+          dot.className = "stop-dot";
+          el.appendChild(label);
+          el.appendChild(dot);
+          const marker = new maplibregl.Marker({ element: el })
+            .setLngLat([stop.lng, stop.lat])
+            .addTo(map);
+          el.onclick = (e) => {
+            e.stopPropagation();
+            showNextBuses(id);
+          };
+          stopMarkers.push(marker);
+        });
+      }
+
+      function showNextBuses(stopId) {
+        currentPanelTrip = null;
+        const stop = stopsData[stopId];
+        document.getElementById("panel-via").innerText = "";
+        const platformText = stop.platform ? ` (${stop.platform}番のりば)` : "";
+        document.getElementById("panel-title").innerText =
+          stop.name + platformText;
+        document.getElementById("office-info").innerText = "次のバス";
+        const content = document.getElementById("panel-content");
+        content.innerHTML = "";
+        const nowStr = new Date().toTimeString().split(" ")[0];
+        const arrivals = [];
+        Object.keys(timetablesData).forEach((rid) => {
+          Object.keys(timetablesData[rid]).forEach((tid) => {
+            const trip = timetablesData[rid][tid];
+            if (!isServiceRunningToday(trip.service_id)) return;
+            const st = trip.stops.find((s) => s.stop_id === stopId);
+            if (st && st.time > nowStr)
+              arrivals.push({
+                time: st.time,
+                route_id: rid,
+                trip_id: tid,
+                headsign: trip.headsign,
+              });
+          });
+        });
+        if (arrivals.length === 0) {
+          content.innerHTML =
+            "<div style='padding:40px; text-align:center; color:#999;'>本日の運行は終了しました</div>";
+        } else {
+          arrivals
+            .sort((a, b) => a.time.localeCompare(b.time))
+            .slice(0, 10)
+            .forEach((bus) => {
+              const div = document.createElement("div");
+              div.className = "item-row future";
+              div.innerHTML = `<div class="item-time">${bus.time.substring(0, 5)}</div><div class="item-info">${routesData[bus.route_id].short_name || bus.route_id}系統 ${bus.headsign}行</div>`;
+              div.onclick = () =>
+                selectBus(bus.headsign, bus.trip_id, bus.route_id, stopId);
+              content.appendChild(div);
+            });
+        }
+        document.getElementById("bottom-panel").classList.add("open");
+      }
+
+      async function selectBus(headsign, tripId, routeId, highlightId = null) {
+        const trip = timetablesData[routeId][tripId];
+        currentPanelTrip = { tripId, routeId, highlightId };
+        const routeInfo = routesData[routeId];
+        const content = document.getElementById("panel-content");
+        document.getElementById("panel-via").innerText = trip.via
+          ? `${trip.via} 経由`
+          : "";
+        document.getElementById("panel-title").innerText = `${headsign}行`;
+        document.getElementById("office-info").innerText =
+          extraData.offices[trip.office_id] || "";
+        content.innerHTML = "";
+        const nowStr = new Date().toTimeString().split(" ")[0];
+        let targetScrollEl = null;
+        let nextStopId = highlightId;
+        if (!highlightId) {
+          const next = trip.stops.find((st) => st.time > nowStr);
+          if (next) nextStopId = next.stop_id;
+        }
+        trip.stops.forEach((st, index) => {
+          const s = stopsData[st.stop_id];
+          const isPast = st.time < nowStr;
+          const div = document.createElement("div");
+          div.id = `row-${index}`;
+          div.className = `item-row ${isPast ? "past" : "future"} ${st.stop_id === highlightId ? "highlight" : ""} ${!highlightId && st.stop_id === nextStopId ? "next-stop" : ""}`;
+          div.innerHTML = `<div class="item-time">${st.time.substring(0, 5)}</div><div class="item-info">${s ? s.name : "..."}</div>`;
+          div.onclick = (e) => {
+            e.stopPropagation();
+            map.flyTo({
+              center: [s.lng, s.lat],
+              zoom: 17,
+              speed: 1.2,
+              padding: { bottom: window.innerHeight * 0.55 },
+            });
+          };
+          content.appendChild(div);
+          if (st.stop_id === nextStopId || st.stop_id === highlightId)
+            targetScrollEl = div;
+        });
+        const patternKey = trip.stops.map((s) => s.stop_id).join("|");
+        const shape = shapesData[patternKey];
+        if (shape) {
+          if (map.getLayer("route-line")) map.removeLayer("route-line");
+          if (map.getSource("route")) map.removeSource("route");
+          map.addSource("route", {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              geometry: { type: "LineString", coordinates: shape.coordinates },
+            },
+          });
+          map.addLayer({
+            id: "route-line",
+            type: "line",
+            source: "route",
+            paint: {
+              "line-color": "#" + (routeInfo.color || "00703c"),
+              "line-width": 8,
+              "line-opacity": 0.6,
+            },
+          });
+        }
+        document.getElementById("bottom-panel").classList.add("open");
+        if (targetScrollEl) {
+          setTimeout(() => {
+            content.scrollTop =
+              targetScrollEl.offsetTop - content.clientHeight / 2 + 40;
+          }, 100);
+        }
+      }
+
+      function updatePanelState() {
+        if (!currentPanelTrip) return;
+        const trip =
+          timetablesData[currentPanelTrip.routeId][currentPanelTrip.tripId];
+        const nowStr = new Date().toTimeString().split(" ")[0];
+        let nextStopFound = false;
+        trip.stops.forEach((st, index) => {
+          const div = document.getElementById(`row-${index}`);
+          if (!div) return;
+          const isPast = st.time < nowStr;
+          const isHighlight = st.stop_id === currentPanelTrip.highlightId;
+          let isNextBusStop = false;
+          if (!currentPanelTrip.highlightId && !isPast && !nextStopFound) {
+            isNextBusStop = true;
+            nextStopFound = true;
+          }
+          div.className = `item-row ${isPast ? "past" : "future"} ${isHighlight ? "highlight" : ""} ${isNextBusStop ? "next-stop" : ""}`;
+        });
+      }
+
+      function closePanel() {
+        document.getElementById("bottom-panel").classList.remove("open");
+        currentPanelTrip = null;
+        if (map.getLayer("route-line")) map.removeLayer("route-line");
+      }
+      init();
+    </script>
+  </body>
+</html>
