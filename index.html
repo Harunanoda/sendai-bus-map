@@ -11,7 +11,7 @@
     />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
     />
     <style>
       html,
@@ -81,7 +81,7 @@
       }
 
       /* バスアイコン (Material Symbols) */
-      .material-symbols-outlined.bus-icon {
+      .material-symbols-rounded.bus-icon {
         width: 34px;
         height: 34px;
         font-size: 34px;
@@ -132,35 +132,91 @@
         font-size: 22px;
       }
 
-      /* ボトムパネル */
+      /* パネル共通設定（フローティングへ変更） */
       #bottom-panel {
         position: absolute;
-        bottom: -60%;
-        left: 0;
-        width: 100%;
+        bottom: 20px;
+        left: 20px;
+        width: calc(100% - 40px);
+        max-width: 400px;
         height: 60%;
+        max-height: 80vh;
         background: white;
         z-index: 6000;
         transition: 0.35s cubic-bezier(0.19, 1, 0.22, 1);
-        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15);
-        border-radius: 24px 24px 0 0;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        border-radius: 16px;
         display: flex;
         flex-direction: column;
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+        pointer-events: none;
+        border: 1px solid #eee;
       }
+
+      /* PC表示（左上フローティング） */
+      @media (min-width: 768px) {
+        #bottom-panel {
+          top: 20px;
+          bottom: auto;
+          left: 20px;
+          max-height: calc(100vh - 120px);
+        }
+      }
+
+      /* スマホ表示（以前のボトムシート感を維持しつつ浮かせる） */
+      @media (max-width: 767px) {
+        #bottom-panel {
+          bottom: 20px;
+          left: 10px;
+          width: calc(100% - 20px);
+        }
+      }
+
       #bottom-panel.open {
-        bottom: 0;
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
       }
-      .drag-handle {
-        width: 50px;
-        height: 5px;
-        background: #e0e0e0;
-        border-radius: 10px;
-        margin: 12px auto;
-        cursor: pointer;
-      }
+
       .panel-header {
-        padding: 0 24px 16px 24px;
+        padding: 20px 24px 16px 24px;
         border-bottom: 1px solid #f0f0f0;
+        position: relative;
+      }
+
+      /* Material 3スタイルのIconButton */
+      .close-btn {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s;
+        border: none;
+        z-index: 100;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .close-btn:hover {
+        background: rgba(0, 0, 0, 0.08);
+      }
+      .close-btn:active {
+        background: rgba(0, 0, 0, 0.12);
+      }
+      .material-symbols-rounded {
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 24;
+        font-size: 24px;
+        color: #444;
       }
       .panel-via {
         font-size: 12px;
@@ -287,7 +343,7 @@
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
         padding: 0;
       }
-      .material-symbols-outlined {
+      .material-symbols-rounded {
         font-variation-settings:
           "FILL" 1,
           "wght" 400,
@@ -315,7 +371,7 @@
         >
       </div>
       <div id="attribution-btn" onclick="toggleAttribution()">
-        <span class="material-symbols-outlined">info</span>
+        <span class="material-symbols-rounded">info</span>
       </div>
     </div>
 
@@ -324,7 +380,16 @@
       <div id="clock-time"></div>
     </div>
     <div id="bottom-panel">
-      <div class="drag-handle" onclick="closePanel()"></div>
+      <button
+        class="close-btn"
+        onclick="
+          event.stopPropagation();
+          closePanel();
+        "
+        title="閉じる"
+      >
+        <span class="material-symbols-rounded">close</span>
+      </button>
       <div class="panel-header">
         <div id="panel-via" class="panel-via"></div>
         <div id="panel-title" class="panel-title">バス停を選択</div>
@@ -463,14 +528,16 @@
                 const el = document.createElement("div");
                 el.className = "bus-marker-container";
                 const rName = routesData[routeId]?.short_name || routeId;
-                el.innerHTML = `<div class="bus-label">[${rName}] ${trip.headsign}行</div><span class="material-symbols-outlined bus-icon">directions_bus</span>`;
+                el.innerHTML = `<div class="bus-label">[${rName}] ${trip.headsign}行</div><span class="material-symbols-rounded bus-icon">directions_bus</span>`;
 
                 const handler = (e) => {
                   e.stopPropagation();
+                  // タッチ時のゴーストクリック（背後の要素やパネル内要素への誤反応）を防止
+                  if (e.type === "touchstart") e.preventDefault();
                   selectBus(trip.headsign, tripId, routeId);
                 };
                 el.addEventListener("click", handler);
-                el.addEventListener("touchstart", handler, { passive: true });
+                el.addEventListener("touchstart", handler, { passive: false });
 
                 busMarkers[tripId] = new maplibregl.Marker({
                   element: el,
@@ -563,10 +630,11 @@
 
           const handler = (e) => {
             e.stopPropagation();
+            if (e.type === "touchstart") e.preventDefault();
             showNextBuses(id);
           };
           el.addEventListener("click", handler);
-          el.addEventListener("touchstart", handler, { passive: true });
+          el.addEventListener("touchstart", handler, { passive: false });
           stopMarkers.push(marker);
         });
       }
@@ -588,8 +656,9 @@
           !isGrouped && stop.platform ? ` (${stop.platform}番のりば)` : "";
         document.getElementById("panel-title").innerText =
           stop.name + platformText;
-        document.getElementById("office-info").innerText = "次のバス";
+        document.getElementById("office-info").innerText = "時刻表";
         const content = document.getElementById("panel-content");
+        content.scrollTop = 0;
         content.innerHTML = "";
         const nowStr = new Date().toTimeString().split(" ")[0];
 
@@ -599,7 +668,7 @@
             const trip = timetablesData[rid][tid];
             if (!isServiceRunningToday(trip.service_id)) return;
             const st = trip.stops.find((s) => targetIds.includes(s.stop_id));
-            if (st && st.time > nowStr) {
+            if (st) {
               const pole = stopsData[st.stop_id];
               allArrivals.push({
                 time: st.time,
@@ -608,6 +677,7 @@
                 headsign: trip.headsign,
                 platform: pole.platform,
                 actual_stop_id: st.stop_id,
+                is_past: st.time < nowStr,
               });
             }
           });
@@ -615,27 +685,55 @@
 
         if (allArrivals.length === 0) {
           content.innerHTML =
-            "<div style='padding:40px; text-align:center; color:#999;'>本日の運行は終了しました</div>";
+            "<div style='padding:40px; text-align:center; color:#999;'>本日の運行はありません</div>";
         } else {
-          allArrivals
-            .sort((a, b) => a.time.localeCompare(b.time))
-            .slice(0, 10)
-            .forEach((bus) => {
-              const div = document.createElement("div");
-              div.className = "item-row future";
-              const platformLabel = bus.platform
-                ? `<div class="item-platform">${bus.platform}番のりば</div>`
-                : "";
-              div.innerHTML = `<div class="item-time">${bus.time.substring(0, 5)}</div><div class="item-info">${routesData[bus.route_id]?.short_name || bus.route_id}系統 ${bus.headsign}行${platformLabel}</div>`;
-              div.onclick = () =>
-                selectBus(
-                  bus.headsign,
-                  bus.trip_id,
-                  bus.route_id,
-                  bus.actual_stop_id,
-                );
-              content.appendChild(div);
-            });
+          allArrivals.sort((a, b) => a.time.localeCompare(b.time));
+
+          let targetScrollEl = null;
+          let firstFutureFound = false;
+
+          allArrivals.forEach((bus) => {
+            const div = document.createElement("div");
+            // 過去のバスはグレーアウト、次は目立たせる（必要なら）
+            div.className = `item-row ${bus.is_past ? "past" : "future"}`;
+
+            // 次に来る最初のバスを特定
+            if (!bus.is_past && !firstFutureFound) {
+              div.classList.add("next-stop"); // 次のバスを強調
+              targetScrollEl = div;
+              firstFutureFound = true;
+            }
+
+            const platformLabel = bus.platform
+              ? `<div class="item-platform">${bus.platform}番のりば</div>`
+              : "";
+            div.innerHTML = `<div class="item-time">${bus.time.substring(0, 5)}</div><div class="item-info">${routesData[bus.route_id]?.short_name || bus.route_id}系統 ${bus.headsign}行${platformLabel}</div>`;
+            div.onclick = () =>
+              selectBus(
+                bus.headsign,
+                bus.trip_id,
+                bus.route_id,
+                bus.actual_stop_id,
+              );
+            content.appendChild(div);
+          });
+
+          // 自動スクロール：ターゲットが画面の上から1/3くらいに来るように調整
+          if (targetScrollEl) {
+            setTimeout(() => {
+              // offsetTop から コンテナの高さの 1/3 を引くことで、ターゲットを上部に持ってくる（少し過去が見える）
+              const targetPos =
+                targetScrollEl.offsetTop - content.clientHeight / 3;
+              content.scrollTo({ top: targetPos, behavior: "smooth" });
+            }, 100);
+          } else if (allArrivals.length > 0) {
+            // 全て過去の場合は一番下へ（または一番上でもよいが、とりあえずそのまま）
+            // ユーザーの要望は「次」の話なので、全て終わっている場合は特段指定なしだが、
+            // 一応最後の便が見えるようにしておくと親切かもしれない
+            setTimeout(() => {
+              content.scrollTop = content.scrollHeight;
+            }, 100);
+          }
         }
         document.getElementById("bottom-panel").classList.add("open");
         updateStopMarkers();
@@ -648,6 +746,7 @@
 
         const routeInfo = routesData[routeId];
         const content = document.getElementById("panel-content");
+        content.scrollTop = 0;
         document.getElementById("panel-via").innerText = trip.via
           ? `${trip.via} 経由`
           : "";
@@ -676,11 +775,14 @@
           div.innerHTML = `<div class="item-time">${st.time.substring(0, 5)}</div><div class="item-info">${s ? s.name : "..."}${platformLabel}</div>`;
           div.onclick = (e) => {
             e.stopPropagation();
+            const isMobile = window.innerWidth < 768;
             map.flyTo({
               center: [s.lng, s.lat],
               zoom: 17,
               speed: 1.2,
-              padding: { bottom: window.innerHeight * 0.55 },
+              padding: isMobile
+                ? { bottom: window.innerHeight * 0.4 }
+                : { left: 400 },
             });
           };
           content.appendChild(div);
