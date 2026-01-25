@@ -216,6 +216,21 @@
         width: 100%;
         margin-bottom: 10px;
       }
+      button.assign-btn {
+        width: 100%;
+        margin-bottom: 10px;
+        background: #ffa000;
+        color: white;
+      }
+      button.assign-btn.active {
+        background: #ff6f00;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+        border: 2px solid #333;
+      }
+      button.assign-btn:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
       .undo-icon {
         vertical-align: bottom;
         font-size: 18px;
@@ -348,6 +363,18 @@
         地図上のバス停をクリックして、ルートに追加してください。
       </div>
 
+      <button
+        class="assign-btn"
+        id="assign-btn"
+        onclick="toggleAssignMode()"
+        disabled
+      >
+        <span class="material-symbols-outlined undo-icon"
+          >add_location_alt</span
+        >
+        最後の点をバス停に設定
+      </button>
+
       <button class="secondary undo-btn" onclick="undo()">
         <span class="material-symbols-outlined undo-icon">undo</span>
         直前の操作を取り消す
@@ -379,6 +406,7 @@
       let segments = []; // 各区間の全座標列のリスト
       let markers = []; // waypoint 各点のマーカー（赤い点）
       let stopMarkers = {}; // 全バス停マーカー
+      let isAssignMode = false;
 
       const map = new maplibregl.Map({
         container: "map",
@@ -441,6 +469,23 @@
 
       function toggleMenu() {
         document.getElementById("layer-menu").classList.toggle("show");
+      }
+
+      function toggleAssignMode() {
+        if (waypoints.length === 0) return;
+        isAssignMode = !isAssignMode;
+        const btn = document.getElementById("assign-btn");
+        if (isAssignMode) {
+          btn.classList.add("active");
+          document.getElementById("guide-msg").innerText =
+            "地図上のバス停をクリックして、最後の点と紐付けてください。";
+          document.getElementById("guide-msg").style.background = "#fffbe6";
+        } else {
+          btn.classList.remove("active");
+          document.getElementById("guide-msg").innerText =
+            "地図上のバス停をクリックして、ルートに追加してください。";
+          document.getElementById("guide-msg").style.background = "";
+        }
       }
 
       function switchLayer(type) {
@@ -510,15 +555,39 @@
           return;
         }
 
-        const newLngLat = [stop.lng, stop.lat];
+        const lastMarkerObj =
+          markers.length > 0 ? markers[markers.length - 1] : null;
 
-        // ルート描画 (2つ目以降の場合、直前の点からの経路を追加)
-        if (waypoints.length > 0) {
-          await addPathSegment(newLngLat);
+        if (
+          isAssignMode &&
+          lastMarkerObj &&
+          lastMarkerObj.type === "waypoint"
+        ) {
+          // 【道路上の点をバス停として紐付ける】（ボタンが押されている時のみ）
+          lastMarkerObj.type = "stop";
+          const svg = lastMarkerObj.marker.getElement().querySelector("svg");
+          if (svg) {
+            svg.querySelector("path").setAttribute("fill", "#00703c");
+          }
+          toggleAssignMode(); // モード解除
         } else {
-          // 最初の点
-          waypoints.push(newLngLat);
-          // 始点にはマーカーを置かない（バス停マーカーがあるため）
+          // 通常通りバス停の座標を直接追加
+          const newLngLat = [stop.lng, stop.lat];
+
+          if (waypoints.length > 0) {
+            await addPathSegment(newLngLat);
+          } else {
+            // 最初の点（始点）
+            waypoints.push(newLngLat);
+            const marker = new maplibregl.Marker({
+              color: "#00703c",
+              scale: 0.6,
+            })
+              .setLngLat(newLngLat)
+              .addTo(map);
+            markers.push({ type: "stop", marker: marker });
+          }
+          if (isAssignMode) toggleAssignMode(); // 念のため解除
         }
 
         selectedStops.push({
@@ -531,17 +600,29 @@
         // UI更新
         updateStopListUI();
         updateOutput();
+        updateButtonStates();
+      }
+
+      function updateButtonStates() {
+        document.getElementById("assign-btn").disabled = waypoints.length === 0;
       }
 
       // 地図上の任意地点をクリックしたとき
       map.on("click", async (e) => {
-        // 少なくとも始点が選択されていなければ、途中経路は描けない
-        if (selectedStops.length === 0) {
-          alert("まずは始点となるバス停をクリックしてください。");
-          return;
-        }
         const lngLat = [e.lngLat.lng, e.lngLat.lat];
-        await addPathSegment(lngLat, true); // true = 中間点（waypoint）として追加
+
+        if (waypoints.length === 0) {
+          // 始点を道路上の点から始める場合
+          waypoints.push(lngLat);
+          const marker = new maplibregl.Marker({ color: "#d32f2f", scale: 0.6 })
+            .setLngLat(lngLat)
+            .addTo(map);
+          markers.push({ type: "waypoint", marker: marker });
+        } else {
+          // 2点目以降
+          await addPathSegment(lngLat, true); // true = 中間点（waypoint）として追加
+        }
+        updateButtonStates();
       });
 
       // 経路区間を追加する関数
@@ -689,6 +770,8 @@
 
         drawRoute();
         updateOutput();
+        updateButtonStates();
+        if (isAssignMode) toggleAssignMode(); // モード解除
       }
 
       function resetAll() {
@@ -702,6 +785,8 @@
 
         document.getElementById("output").value = "";
         updateStopListUI();
+        updateButtonStates();
+        if (isAssignMode) toggleAssignMode();
 
         if (map.getSource("route"))
           map
@@ -717,17 +802,15 @@
         }
 
         let combined = [];
-        let currentIndex = 0;
-        let stopIndices = [0]; // 始点のインデックスは常に0
+        let stopIndices = [0]; // 始点のインデックス（waypoints[0]）は常に0
 
         segments.forEach((seg, i) => {
           const s = [...seg];
           if (combined.length > 0) s.shift(); // 前のセグメントの最後尾と重複するので削除
-
           combined = combined.concat(s);
 
-          // markers[i] は segments[i] の終点に対応する情報を持っている
-          if (markers[i] && markers[i].type === "stop") {
+          // markers[i+1] は waypoints[i+1]（このセグメントの終点）の属性を持っている
+          if (markers[i + 1] && markers[i + 1].type === "stop") {
             stopIndices.push(combined.length - 1);
           }
         });

@@ -22,8 +22,25 @@ function patch() {
   const segmentOverrides = {};
   Object.entries(manualShapes).forEach(([key, data]) => {
     if (key.includes("|...|")) {
-      const [startId, endId] = key.split("|...|");
-      segmentOverrides[`${startId}|${endId}`] = data.coordinates;
+      const stopIdsInTemplate = key.split("|...|");
+      if (
+        data.stop_indices &&
+        data.stop_indices.length === stopIdsInTemplate.length
+      ) {
+        // 3点以上のバス停をつなぐテンプレートに対応
+        for (let i = 0; i < stopIdsInTemplate.length - 1; i++) {
+          const startId = stopIdsInTemplate[i];
+          const endId = stopIdsInTemplate[i + 1];
+          const startIdx = data.stop_indices[i];
+          const endIdx = data.stop_indices[i + 1];
+          const segmentCoords = data.coordinates.slice(startIdx, endIdx + 1);
+          segmentOverrides[`${startId}|${endId}`] = segmentCoords;
+        }
+      } else {
+        // 従来の2点間テンプレート
+        const [startId, endId] = stopIdsInTemplate;
+        segmentOverrides[`${startId}|${endId}`] = data.coordinates;
+      }
     }
   });
 
@@ -55,9 +72,13 @@ function patch() {
         const head = currentPattern.coordinates.slice(0, startCoordIdx);
         const tail = currentPattern.coordinates.slice(endCoordIdx + 1);
 
+        // 新しい座標列を結合
         currentPattern.coordinates = [...head, ...newCoords, ...tail];
 
+        // 座標数の変化量を計算
         const diff = newCoords.length - (endCoordIdx - startCoordIdx + 1);
+
+        // パッチを当てたバス停以降のすべての stop_indices を更新
         for (let i = endIndex; i < currentPattern.stop_indices.length; i++) {
           currentPattern.stop_indices[i] += diff;
         }
