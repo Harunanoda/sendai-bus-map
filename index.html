@@ -643,6 +643,13 @@
         return h * 3600 + m * 60 + (s || 0);
       }
 
+      function formatHeadsign(headsign) {
+        if (headsign.includes("循環")) {
+          return headsign;
+        }
+        return headsign + "行";
+      }
+
       function updateBuses() {
         const now = new Date();
         const nowSec =
@@ -674,7 +681,7 @@
                 const el = document.createElement("div");
                 el.className = "bus-marker-container";
                 const rName = routesData[routeId]?.short_name || routeId;
-                el.innerHTML = `<div class="bus-label">[${rName}] ${trip.headsign}行</div><span class="material-symbols-outlined bus-icon">directions_bus</span>`;
+                el.innerHTML = `<div class="bus-label">[${rName}] ${formatHeadsign(trip.headsign)}</div><span class="material-symbols-outlined bus-icon">directions_bus</span>`;
 
                 const handler = (e) => {
                   e.stopPropagation();
@@ -853,7 +860,12 @@
             const platformLabel = bus.platform
               ? `<div class="item-platform">${bus.platform}番のりば</div>`
               : "";
-            div.innerHTML = `<div class="item-time">${bus.time.substring(0, 5)}</div><div class="item-info">${routesData[bus.route_id]?.short_name || bus.route_id}系統 ${bus.headsign}行${platformLabel}</div>`;
+            div.innerHTML = `<div class="item-time">${bus.time.substring(
+              0,
+              5,
+            )}</div><div class="item-info">${
+              routesData[bus.route_id]?.short_name || bus.route_id
+            }系統 ${formatHeadsign(bus.headsign)}${platformLabel}</div>`;
             div.onclick = () =>
               selectBus(
                 bus.headsign,
@@ -898,7 +910,7 @@
           : "";
         const rName = routeInfo?.short_name || routeId;
         document.getElementById("panel-title").innerText =
-          `[${rName}] ${headsign}行`;
+          `[${rName}] ${formatHeadsign(headsign)}`;
         const officeName = extraData.offices[trip.office_id] || "";
         document.getElementById("office-info").innerText = officeName;
 
