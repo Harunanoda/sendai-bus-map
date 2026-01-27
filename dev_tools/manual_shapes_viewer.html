@@ -40,6 +40,10 @@
         margin: 0;
         font-size: 1.2em;
       }
+      #stats {
+        font-size: 0.8em;
+        margin-top: 5px;
+      }
       .route-list {
         flex: 1;
         overflow-y: auto;
@@ -75,6 +79,11 @@
         font-weight: bold;
         color: #333;
       }
+      .route-meta {
+        margin-top: 5px;
+        font-size: 0.8em;
+        color: #888;
+      }
       .stop-badge {
         display: inline-block;
         padding: 2px 6px;
@@ -107,7 +116,7 @@
     <div id="sidebar">
       <div class="header">
         <h2>Manual Shapes 一覧</h2>
-        <div id="stats" style="font-size: 0.8em; margin-top: 5px"></div>
+        <div id="stats"></div>
       </div>
       <div class="route-list" id="route-list">
         <!-- JSで動的に追加 -->
@@ -172,7 +181,7 @@
           item.innerHTML = `
                     <div class="route-key">${key}</div>
                     <div class="route-info">${stopNames.join(" → ")}</div>
-                    <div style="margin-top:5px; font-size:0.8em; color:#888;">
+                    <div class="route-meta">
                         座標数: ${data.coordinates.length} | 停車数: ${data.stop_indices.length}
                     </div>
                 `;

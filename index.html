@@ -284,36 +284,10 @@
         margin-top: 2px;
       }
 
-      /* 右上時計 */
-      #clock-container {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        z-index: 5500;
-        background: rgba(255, 255, 255, 0.85);
-        padding: 8px 12px;
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-        text-align: right;
-        pointer-events: none;
-        border: 1px solid #ccc;
-      }
-      #clock-date {
-        font-size: 13px;
-        font-weight: bold;
-        color: #555;
-      }
-      #clock-time {
-        font-size: 24px;
-        font-weight: 900;
-        color: #333;
-        line-height: 1.1;
-      }
-
       /* レイヤーメニュー UI (route_editor.htmlと共通) */
       #layer-control-container {
         position: absolute;
-        top: 85px; /* 時計の下 */
+        top: 15px; /* 上に詰める */
         right: 15px;
         z-index: 9000;
       }
@@ -576,10 +550,8 @@
           map.addImage("arrow", imageData);
 
           updateStopMarkers();
-          updateClock();
           setInterval(updateBuses, 5000);
           setInterval(updatePanelState, 2000);
-          setInterval(updateClock, 1000);
           updateBuses();
         });
 
@@ -610,15 +582,6 @@
           event.currentTarget.classList.add("active");
         }
         document.getElementById("layer-menu").classList.remove("show");
-      }
-
-      function updateClock() {
-        const now = new Date();
-        const days = ["日", "月", "火", "水", "木", "金", "土"];
-        const dateStr = `${now.getMonth() + 1}/${now.getDate()}(${days[now.getDay()]})`;
-        const timeStr = `${now.getHours()}:${now.getMinutes().toString().padStart(2, "0")}`;
-        document.getElementById("clock-date").innerText = dateStr;
-        document.getElementById("clock-time").innerText = timeStr;
       }
 
       function isServiceRunningToday(serviceId) {
